@@ -46,13 +46,16 @@ def ntbasename(path):
 
 # -----------------------------------------------------------------------------
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 from mpl_toolkits.mplot3d import Axes3D # needed for 3d projection
 
 def plot_tile(data, title=None):
   try:
     plt.rc('figure', figsize=(9, 9))
     D = np.array(data)
-    plt.imshow(D, origin='lower', cmap='terrain')
+    cmap = cm.terrain
+    cmap.set_bad(color='black')
+    plt.imshow(D, origin='lower', cmap=cmap)
     if title is not None:
       plt.title(title)
     plt.show()

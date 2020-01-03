@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-prog_ver = 'prepare v1.3 Copyright (c) 2019-2020 Matjaz Rihtar'
+prog_ver = 'prepare v1.4 Copyright (c) 2019-2020 Matjaz Rihtar'
 # py_ver = sys.version_info.major
 import sys, os, glob, re
 import ntpath, argparse
@@ -438,12 +438,15 @@ def fill_missing(x1, y1, size, Z):
 
 # -----------------------------------------------------------------------------
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
 def plot_tile(data, title=None):
   try:
     plt.rc('figure', figsize=(9, 9))
     D = np.array(data)
-    plt.imshow(D, origin='lower', cmap='terrain')
+    cmap = cm.terrain
+    cmap.set_bad(color='black')
+    plt.imshow(D, origin='lower', cmap=cmap)
     if title is not None:
       plt.title(title)
     plt.show()
