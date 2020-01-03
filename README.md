@@ -14,7 +14,7 @@ but since then a finer 30-meter resolution (SRTM1) is available for the
 whole world ([JPL Release 2014-321]).
 
 <table>
-<tr><th rowspan=2>Accuracy<br><sup>(90% errors in meters)</sup></th><th colspan=6>Continent</th></tr>
+<tr><th rowspan=2>Accuracy<br><sup>(90% errors, in meters)</sup></th><th colspan=6>Continent</th></tr>
 <tr><td>Africa</td><td>Australia</td><td>Eurasia</td><td>Islands</td><td>N. America</td><td>S. America</td></tr>
 <tr><td>Horizontal</td>       <td>11.9</td><td>7.2</td><td>8.8</td><td>9.0</td><td>12.6</td><td>9.0</td></tr>
 <tr><td>Absolute Vertical</td><td> 5.6</td><td>6.0</td><td>6.2</td><td>8.0</td><td> 9.0</td><td>6.2</td></tr>
@@ -49,7 +49,8 @@ downloaded data must first be converted to internal Python representation
 
 Preprocessing of data also takes care of possible voids detected in data
 (*yes, some tiles may still contain voids!*) with the built-in interpolation
-(griddata/linear) and extrapolation (k-NN/12 neighbours).
+(griddata/linear <sup>[LNDI]</sup>) and extrapolation (k-NN/12 neighbours
+<sup>[CKDT]</sup>).
 
 Example of preprocessing a tile with voids:
 ```
@@ -87,6 +88,12 @@ the elevations between the supplied points from SRTM data files:
 1. [Bilinear interpolation] (smoother, default)
 2. [Inverse Distance Weighting (IDW) interpolation]
 
+<table><tr>
+<td><img src="images/Bilinear.png" width="300px"></td>
+<td width=80px></td>
+<td><img src="images/IDW.png" width="300px"></td>
+</tr></table>
+
 ### Transportability
 
 Additional tools for converting "pickles" to JSON format (and vice versa) are
@@ -108,3 +115,5 @@ coordinates in lower left corner with no void/NaN values.
 [SRTM Data Validation and Applications]: https://www.researchgate.net/profile/Vijith_H/post/What_is_the_vertical_resolutionaccuracy_of_Global_SRTM_1_arc_second_30_m2/attachment/59d6407179197b807799ca7e/AS%3A431123886022658%401479799352926/download/SRTM-program-final-version.pdf
 [Bilinear interpolation]: https://en.wikipedia.org/wiki/Bilinear_interpolation
 [Inverse Distance Weighting (IDW) interpolation]: https://en.wikipedia.org/wiki/Inverse_distance_weighting
+[LNDI]: https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.LinearNDInterpolator.html
+[CKDT]: https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.html
