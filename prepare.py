@@ -1,6 +1,6 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-prog_ver = 'prepare v1.4 Copyright (c) 2019-2020 Matjaz Rihtar'
+prog_ver = 'prepare v1.8 Copyright (c) 2019-2020 Matjaz Rihtar'
 # py_ver = sys.version_info.major
 import sys, os, glob, re
 import ntpath, argparse
@@ -15,7 +15,7 @@ import scipy as sp
 from scipy.interpolate import griddata, interp2d
 from scipy.spatial import cKDTree
 
-tiff_tag = {
+tiff_tags = {
     256: 'image width',
     257: 'image length',
     258: 'bits per sample',
@@ -40,7 +40,7 @@ tiff_tag = {
   42113: 'GDAL nodata'
 }
 
-tiff_type = {
+tiff_types = {
    1: [1, 'byte'],
    2: [1, 'ascii'],
    3: [2, 'short'],
@@ -55,12 +55,23 @@ tiff_type = {
   12: [8, 'double']
 }
 
+gk_ids = {
+  1024: 'GTModelTypeGeoKey',
+  1025: 'GTRasterTypeGeoKey',
+  2048: 'GeodeticCRSGeoKey',
+  2049: 'GeodeticCitationGeoKey',
+  2054: 'GeogAngularUnitsGeoKey',
+  2057: 'EllipsoidSemiMajorAxisGeoKey',
+  2059: 'EllipsoidInvFlatteningGeoKey'
+}
+
 # -----------------------------------------------------------------------------
 def ntdirname(path):
   try:
     head, tail = ntpath.split(path)
     dirname = head or ntpath.dirname(head)
-  except: dirname = '.'
+  except: dirname = ''
+  if len(dirname) == 0: dirname = '.'
   if dirname.endswith(os.sep):
     return dirname
   else:
@@ -86,7 +97,7 @@ def decode_smr16(x):
 
 # -----------------------------------------------------------------------------
 def load_dted(fpath):
-  data = None
+  data = None; raster_type = None
   try:
     fd = open(fpath, 'rb')
     sys.stderr.write('Reading {}\n'.format(fpath))
@@ -167,6 +178,8 @@ def load_dted(fpath):
       for lon in range(0, num_lon):
         data[lon][ii] = decode_smr16(row[lon])
 
+    raster_type = 2 # PixelIsPoint (0,0)
+
     fd.close()
   except:
     exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -174,24 +187,25 @@ def load_dted(fpath):
     name = sys._getframe().f_code.co_name
     errmsg = '{}({}): {}\n'.format(name, exc_tb.tb_lineno, exc[-1].strip())
     sys.stderr.write(errmsg)
-    data = None
-  return data
+    data = None; raster_type = None
+  return data, raster_type
 # load_dted
 
 # -----------------------------------------------------------------------------
 def decode_sig16(x):
-  if x == -32767:
+  if x == -32767 or x == -9999: # ALOS has -9999 for void
     return None # no data
   return x
 # decode_sig16
 
 # -----------------------------------------------------------------------------
 def load_bil(fpath):
-  data = None
+  data = None; raster_type = None
   try:
     fd = open(fpath, 'rb')
     sys.stderr.write('Reading {}\n'.format(fpath))
 
+    # these should be read from .hdr
     num_lon = 3601
     num_lat = 3601
     data = np.empty([num_lon, num_lat])
@@ -203,6 +217,8 @@ def load_bil(fpath):
       row = unpack('<' + num_lat*'h', rowdata_b)
       data[num_lon-ii-1] = [ decode_sig16(x) for x in row ]
 
+    raster_type = 2 # PixelIsPoint (0,0)
+
     fd.close()
   except:
     exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -210,13 +226,13 @@ def load_bil(fpath):
     name = sys._getframe().f_code.co_name
     errmsg = '{}({}): {}\n'.format(name, exc_tb.tb_lineno, exc[-1].strip())
     sys.stderr.write(errmsg)
-    data = None
-  return data
+    data = None; raster_type = None
+  return data, raster_type
 # load_bil
 
 # -----------------------------------------------------------------------------
 def load_tif(fpath):
-  data = None
+  data = None; raster_type = None
   try:
     fd = open(fpath, 'rb')
     sys.stderr.write('Reading {}\n'.format(fpath))
@@ -226,7 +242,7 @@ def load_tif(fpath):
     if byteord_b == b'II': le = True # little endian
     elif byteord_b == b'MM': le = False # big endian
     else: raise SyntaxError('wrong byte order')
-    #sys.stderr.write('Read byte order: {}\n'.format(str(byteord_b)))
+    #print('Read byte order: {}'.format(str(byteord_b)))
 
     version_b = fd.read(2)
     if le: version = unpack('<H', version_b)[0]
@@ -234,13 +250,12 @@ def load_tif(fpath):
     if version != 0x2A: # 42
       raise SyntaxError('wrong version')
 
-    hdrsize = 0
     while True:
       # offset to Image File Directory (IFD)
       ifd_b = fd.read(4)
       if le: ifd = unpack('<I', ifd_b)[0]
       else: ifd = unpack('>I', ifd_b)[0]
-      #sys.stderr.write('Read IFD offset: {:08X}\n'.format(ifd))
+      #print('Read IFD offset: {:08X}'.format(ifd))
       if ifd == 0:
         break
 
@@ -250,7 +265,7 @@ def load_tif(fpath):
       entcnt_b = fd.read(2)
       if le: entcnt = unpack('<H', entcnt_b)[0]
       else: entcnt = unpack('>H', entcnt_b)[0]
-      #sys.stderr.write('Read IFD entry count: {}\n'.format(entcnt))
+      #print('Read IFD entry count: {}'.format(entcnt))
 
       # for each entry
       for ii in range(0, entcnt):
@@ -258,56 +273,104 @@ def load_tif(fpath):
         tag_b = fd.read(2)
         if le: tag = unpack('<H', tag_b)[0]
         else: tag = unpack('>H', tag_b)[0]
-        #if tag in tiff_tag:
-        #  sys.stderr.write('({}) tag: {} {}\n'.format(ii, tag, tiff_tag[tag]))
+        #if tag in tiff_tags:
+        #  print('\n({}) tag: {} {}'.format(ii, tag, tiff_tags[tag]))
         #else: 
-        #  sys.stderr.write('({}) tag: {} unknown\n'.format(ii, tag))
+        #  print('\n({}) tag: {} unknown'.format(ii, tag))
 
         # type code
         tipe_b = fd.read(2)
         if le: tipe = unpack('<H', tipe_b)[0]
         else: tipe = unpack('>H', tipe_b)[0]
-        if tipe in tiff_type:
-          tipe_len = tiff_type[tipe][0]
-          #sys.stderr.write('({}) type: {} {}\n'.format(ii, tipe, tiff_type[tipe][1]))
+        if tipe in tiff_types:
+          tipe_len = tiff_types[tipe][0]
+          #print('({}) type: {} {}'.format(ii, tipe, tiff_types[tipe][1]))
         else:
           tipe_len = None
-          #sys.stderr.write('({}) type: {} unknown\n'.format(ii, tipe))
+          #print('({}) type: {} unknown'.format(ii, tipe))
 
         # count field
         count_b = fd.read(4)
         if le: count = unpack('<I', count_b)[0]
         else: count = unpack('>I', count_b)[0]
-        #sys.stderr.write('({}) count: {}\n'.format(ii, count))
+        #print('({}) count: {}'.format(ii, count))
 
         # data pointer/field
         offset_b = fd.read(4)
         if le: offset = unpack('<I', offset_b)[0]
         else: offset = unpack('>I', offset_b)[0]
 
+        entlen = count * tipe_len
+        #if entlen <= 4:
+        #  print('({}) value: {}'.format(ii, offset))
+        #else:
+        #  print('({}) offset: {:08X}'.format(ii, offset))
+
         if tag == 256: num_lon = offset   # image width
         elif tag == 257: num_lat = offset # image length
+        elif tag == 278: rows = offset    # rows per strip
+        elif tag == 273: # strip offsets
+          if entlen <= 4:
+            strips = [ offset ]
+          else:
+            oldpos = fd.tell()
+            fd.seek(offset)
+            strips_b = fd.read(tipe_len * count)
+            if le: strips = unpack('<' + count*'I', strips_b)
+            else: strips = unpack('>' + count*'I', strips_b)
+            fd.seek(oldpos)
+        elif tag == 34735: # geokey directory tag
+          oldpos = fd.tell()
+          fd.seek(offset)
+          gk_header_b = fd.read(tipe_len * 4)
+          if le: gk_header = unpack('<' + 4*'H', gk_header_b)
+          else: gk_header = unpack('>' + 4*'H', gk_header_b)
 
-        entlen = count * tipe_len
-        if entlen > 4:
-          #sys.stderr.write('({}) offset: {:08X}\n'.format(ii, offset))
-          hdrsize += entlen
-        else:
-          #sys.stderr.write('({}) value: {:08X}\n'.format(ii, offset))
-          pass
+          gk_num = gk_header[3]
+          #print('Read number of GKs: {}'.format(gk_num))
+          for ii in range(gk_num):
+            gk_key_b = fd.read(tipe_len * 4)
+            if le: gk_key = unpack('<' + 4*'H', gk_key_b)
+            else: gk_key = unpack('>' + 4*'H', gk_key_b)
 
-    hdrsize += fd.tell()
-    fd.seek(hdrsize + 1)
+            gk_id = gk_key[0]
+            #if gk_id in gk_ids:
+            #  print('\n(GK:{}) id: {} {}'.format(ii, gk_id, gk_ids[gk_id]))
+            #else:
+            #  print('\n(GK:{}) id: {} unknown'.format(ii, gk_id))
+            gk_tagloc = gk_key[1]
+            #print('(GK:{}) tagloc: {}'.format(ii, gk_tagloc))
+            gk_count = gk_key[2]
+            #print('(GK:{}) count: {}'.format(ii, gk_count))
+            gk_offset = gk_key[3]
+            #if gk_tagloc == 0:
+            #  print('(GK:{}) value: {}'.format(ii, gk_offset))
+            #else:
+            #  print('(GK:{}) offset: {:08X}'.format(ii, gk_offset))
+
+            if gk_id == 1025: # GTRasterTypeGeoKey
+              # 1 = PixelIsArea (0.5,0.5)
+              # 2 = PixelIsPoint (0,0)
+              raster_type = gk_offset
+              if raster_type == 1:
+                sys.stderr.write('Raster type is PixelIsArea (0.5,0.5)\n')
+
+          fd.seek(oldpos)
 
     data = np.empty([num_lon, num_lat])
 
-    for ii in range(num_lon):
-      # read elevations
-      rowdata_b = fd.read(2*num_lat)
+    nr = 0
+    for ii in range(len(strips)):
+      offset = strips[ii]
+      fd.seek(offset)
 
-      if le: row = unpack('<' + num_lat*'h', rowdata_b)
-      else: row = unpack('>' + num_lat*'h', rowdata_b)
-      data[num_lon-ii-1] = [ decode_sig16(x) for x in row ]
+      for jj in range(rows):
+        # read elevations
+        rowdata_b = fd.read(2*num_lat)
+        if le: row = unpack('<' + num_lat*'h', rowdata_b)
+        else: row = unpack('>' + num_lat*'h', rowdata_b)
+        data[num_lon-nr-1] = [ decode_sig16(x) for x in row ]
+        nr += 1
 
     fd.close()
   except:
@@ -316,8 +379,8 @@ def load_tif(fpath):
     name = sys._getframe().f_code.co_name
     errmsg = '{}({}): {}\n'.format(name, exc_tb.tb_lineno, exc[-1].strip())
     sys.stderr.write(errmsg)
-    data = None
-  return data
+    data = None; raster_type = None
+  return data, raster_type
 # load_tif
 
 # -----------------------------------------------------------------------------
@@ -393,15 +456,21 @@ def gridknn2d(X, Y, Z):
 # gridknn2d
 
 # -----------------------------------------------------------------------------
-def fill_missing(x1, y1, size, Z):
+def fill_missing(lat0, lon0, Z, raster_type):
   global no_interp
 
   Zn = None; changed = False
   try:
-    sys.stderr.write('Starting point: {} {}, size: {} x {}\n'.format(x1, y1, size, size))
+    size = len(Z[0])
+    sys.stderr.write('Starting point: {} {}, size: {} x {}\n'.format(lat0, lon0, size, size))
 
-    X = np.linspace(x1, x1+1, num=size, endpoint=True, dtype=np.float_)
-    Y = np.linspace(y1, y1+1, num=size, endpoint=True, dtype=np.float_)
+    if raster_type == 1: # PixelIsArea (0.5,0.5)
+      endp = False
+    else: # PixelIsPoint (0,0)
+      endp = True # srtm last line is repeated as first line in next tile
+
+    X = np.linspace(lon0, lon0+1, num=size, endpoint=endp, dtype=np.float_)
+    Y = np.linspace(lat0, lat0+1, num=size, endpoint=endp, dtype=np.float_)
 
     Z = np.array(Z).astype(np.float_)
     #Z = np.array(np.random.uniform(0.0, 3000.0, (size, size))).astype(np.float_)
@@ -466,32 +535,35 @@ def procfile(fpath):
 
     data = None
     if fname.endswith('.dt2'):
-      data = load_dted(fpath)
+      data, raster_type = load_dted(fpath)
       ppath = fpath.replace('.dt2', '.pickle')
     elif fname.endswith('.bil'):
-      data = load_bil(fpath)
+      data, raster_type = load_bil(fpath)
       ppath = fpath.replace('.bil', '.pickle')
     elif fname.endswith('.tif'):
-      data = load_tif(fpath)
+      data, raster_type = load_tif(fpath)
       ppath = fpath.replace('.tif', '.pickle')
     else:
       raise NotImplementedError('unknown file type')
 
     if data is None:
-      raise ImportError('error loading {}'.format(fname))
+      raise ImportError('error loading {}'.format(fpath))
 
     if plot:
       plot_tile(data, '{} (raw)'.format(fname))
 
-    x1 = 0; y1 = 0; size = len(data[0])
+    lat0 = 0; lon0 = 0
 
-    fn = fname.lower().split('_')
-    if fn[0].startswith('n') or fn[0].startswith('s'):
-      x1 = int(fn[0][1:])
-    if fn[1].startswith('e') or fn[1].startswith('w'):
-      y1 = int(fn[1][1:])
+    fn = fname.split('_')
+    if fn[0].startswith('n') or fn[0].startswith('s'): # SRTM1
+      lat0 = int(fn[0][1:])
+    if fn[1].startswith('e') or fn[1].startswith('w'): # SRTM1
+      lon0 = int(fn[1][1:])
+    if fn[0].startswith('N') or fn[0].startswith('S'): # ALOS
+      lat0 = int(fn[0][1:4])
+      lon0 = int(fn[0][5:8])
 
-    data, changed = fill_missing(x1, y1, size, data)
+    data, changed = fill_missing(lat0, lon0, data, raster_type)
 
     if plot and changed:
       plot_tile(data, '{} (interpolated)'.format(fname))
@@ -514,18 +586,18 @@ def procfile(fpath):
 def main(argv):
   global where, prog, no_interp, plot
 
-# argv = ['prepare.py', 'sample.dt2']
+# argv = ['prepare.py', 'data\s17_w068_1arc_v3.dt2']
   where = ntdirname(argv[0])
   prog = ntbasename(argv[0]).replace('.py', '').replace('.PY', '')
 
-  parser = argparse.ArgumentParser(description='Prepares SRTM data files for processing',
+  parser = argparse.ArgumentParser(description='Prepares SRTM/ALOS data files for processing',
                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('inp_files', metavar='<data_file>', nargs='+',
                        help='Input file(s) in DTED/BIL/TIFF format')
   parser.add_argument('-noi', action='store_true', default=False, dest='no_interp',
                        help='Don\'t do griddata interpolation')
   parser.add_argument('-p', action='store_true', default=False, dest='plot',
-                       help='Plot read SRTM data')
+                       help='Plot read SRTM/ALOS data')
 
   args = parser.parse_args()
   no_interp = args.no_interp

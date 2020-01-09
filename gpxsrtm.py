@@ -1,6 +1,6 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-prog_ver = 'gpxsrtm v1.6 Copyright (c) 2019-2020 Matjaz Rihtar'
+prog_ver = 'gpxsrtm v1.11 Copyright (c) 2019-2020 Matjaz Rihtar'
 # py_ver = sys.version_info.major
 import sys, os, glob, re
 import ntpath, argparse
@@ -13,7 +13,7 @@ import pickle, json
 
 import numpy as np
 import scipy as sp
-from scipy.interpolate import griddata, interp2d
+from scipy.interpolate import griddata, interp2d, Rbf
 
 import gpxpy
 from gpxpy.gpx import GPXBounds, GPXWaypoint
@@ -29,7 +29,8 @@ def ntdirname(path):
   try:
     head, tail = ntpath.split(path)
     dirname = head or ntpath.dirname(head)
-  except: dirname = '.'
+  except: dirname = ''
+  if len(dirname) == 0: dirname = '.'
   if dirname.endswith(os.sep):
     return dirname
   else:
@@ -129,22 +130,42 @@ def distance(lat1, lon1, lat2, lon2):
 # distance
 
 # -----------------------------------------------------------------------------
-def get_elev_idw(point):
+def get_elev(point, it='bil'):
   elev = None
   try:
     lat = point.latitude
     lon = point.longitude
+    #print('lat = {:.7f}'.format(lat))
+    #print('lon = {:.7f}'.format(lon))
 
     inc = 1/3600
 
     lat_deg = math.floor(lat)
     lon_deg = math.floor(lon)
-    #print('lat = {:.9f}'.format(lat))
-    #print('lon = {:.9f}'.format(lon))
+    #print('lat_deg = {}'.format(lat_deg))
+    #print('lon_deg = {}'.format(lon_deg))
     lat_sec = lat % 1
     lon_sec = lon % 1
-    #print('lat_sec = {:.9f}'.format(lat_sec))
-    #print('lon_sec = {:.9f}'.format(lon_sec))
+    #print('lat_sec = {:.7f}'.format(lat_sec))
+    #print('lon_sec = {:.7f}'.format(lon_sec))
+    if source == 'alos':
+      ofs = inc
+      if lat_sec < inc: 
+        lat_deg -= 1
+        lat_sec += 3599/3600
+        #print('fixed lat_deg = {}'.format(lat_deg))
+      else:
+        lat_sec -= inc
+      if lon_sec < inc:
+        lon_deg -= 1
+        lon_sec += 3599/3600
+        #print('fixed lon_deg = {}'.format(lon_deg))
+      else:
+        lon_sec -= inc
+      #print('fixed lat_sec = {:.7f}'.format(lat_sec))
+      #print('fixed lon_sec = {:.7f}'.format(lon_sec))
+    else:
+      ofs = 0
     lat_idx = int(lat_sec * 3600)
     lon_idx = int(lon_sec * 3600)
     #print('lat_idx = {}'.format(lat_idx))
@@ -152,53 +173,72 @@ def get_elev_idw(point):
 
     data = gdata[lat_deg][lon_deg]
 
-    lat1 = lat_deg + lat_idx * inc
-    lon1 = lon_deg + lon_idx * inc
+    lat1 = lat_deg + ofs + lat_idx * inc
+    lon1 = lon_deg + ofs + lon_idx * inc
     elev1 = data[lat_idx][lon_idx]
-    #print('Base point at ({:.9f},{:.9f}), elev: {:.3f}'.format(lat1, lon1, elev1))
 
-    lat2 = lat_deg + lat_idx * inc
-    lon2 = lon_deg + (lon_idx + 1) * inc
+    lat2 = lat_deg + ofs + lat_idx * inc
+    lon2 = lon_deg + ofs + (lon_idx + 1) * inc
     elev2 = data[lat_idx][lon_idx+1]
 
-    lat3 = lat_deg + (lat_idx + 1) * inc
-    lon3 = lon_deg + lon_idx * inc
+    lat3 = lat_deg + ofs + (lat_idx + 1) * inc
+    lon3 = lon_deg + ofs + lon_idx * inc
     elev3 = data[lat_idx+1][lon_idx]
 
-    lat4 = lat_deg + (lat_idx + 1) * inc
-    lon4 = lon_deg + (lon_idx + 1) * inc
+    lat4 = lat_deg + ofs + (lat_idx + 1) * inc
+    lon4 = lon_deg + ofs + (lon_idx + 1) * inc
     elev4 = data[lat_idx+1][lon_idx+1]
 
-    # Inverse Distance Weighting (IDW) interpolation
-    w = 0
-    elev = 0
+    if it == 'bil': 
+      # bilinear interpolaton
+      #print('Point1 at ({:.7f},{:.7f}), elev: {:.2f}'.format(lat1, lon1, elev1))
+      #print('Point2 at ({:.7f},{:.7f}), elev: {:.2f}'.format(lat2, lon2, elev2))
+      #print('Point3 at ({:.7f},{:.7f}), elev: {:.2f}'.format(lat3, lon3, elev3))
+      #print('Point4 at ({:.7f},{:.7f}), elev: {:.2f}'.format(lat4, lon4, elev4))
 
-    dist1 = distance(lat, lon, lat1, lon1)
-    if dist1 == 0.0: dist1 = 0.01
-    #print('dist1: {:.3f}, elev: {:.3f}'.format(dist1, elev1))
-    w += 1/dist1
-    elev += elev1/dist1
+      R1 = (lon2 - lon)/(lon2 - lon1)*elev1 + (lon - lon1)/(lon2 - lon1)*elev2
+      R2 = (lon2 - lon)/(lon2 - lon1)*elev3 + (lon - lon1)/(lon2 - lon1)*elev4
+      elev = (lat3 - lat)/(lat3 - lat1)*R1 + (lat - lat1)/(lat3 - lat1)*R2
 
-    dist2 = distance(lat, lon, lat2, lon2)
-    if dist2 == 0.0: dist2 = 0.01
-    #print('dist2: {:.3f}, elev: {:.3f}'.format(dist2, elev2))
-    w += 1/dist2
-    elev += elev2/dist2
+      #X = [lon1, lon2]
+      #Y = [lat1, lat3]
+      #Z = [elev1, elev2, elev3, elev4]
+      #spline = interp2d(X, Y, Z, kind='linear')
+      #Xp = [lon]
+      #Yp = [lat]
+      #Zp = spline(Xp, Yp) # result should be the the same as above
 
-    dist3 = distance(lat, lon, lat3, lon3)
-    if dist3 == 0.0: dist3 = 0.01
-    #print('dist3: {:.3f}, elev: {:.3f}'.format(dist3, elev3))
-    w += 1/dist3
-    elev += elev3/dist3
+    else: # it == 'idw'
+      # Inverse Distance Weighting (IDW) interpolation
+      w = 0
+      elev = 0
 
-    dist4 = distance(lat, lon, lat4, lon4)
-    if dist4 == 0.0: dist4 = 0.01
-    #print('dist4: {:.3f}, elev: {:.3f}'.format(dist4, elev4))
-    w += 1/dist4
-    elev += elev4/dist4
+      dist1 = distance(lat, lon, lat1, lon1)
+      if dist1 == 0.0: dist1 = 0.01
+      #print('Point1 at ({:.7f},{:.7f}), elev: {:.2f}, dist: {:.2f}'.format(lat1, lon1, elev1, dist1))
+      w += 1/dist1
+      elev += elev1/dist1
 
-    if w > 0:
-      elev = elev/w
+      dist2 = distance(lat, lon, lat2, lon2)
+      if dist2 == 0.0: dist2 = 0.01
+      #print('Point2 at ({:.7f},{:.7f}), elev: {:.2f}, dist: {:.2f}'.format(lat2, lon2, elev2, dist2))
+      w += 1/dist2
+      elev += elev2/dist2
+
+      dist3 = distance(lat, lon, lat3, lon3)
+      if dist3 == 0.0: dist3 = 0.01
+      #print('Point3 at ({:.7f},{:.7f}), elev: {:.2f}, dist: {:.2f}'.format(lat3, lon3, elev3, dist3))
+      w += 1/dist3
+      elev += elev3/dist3
+
+      dist4 = distance(lat, lon, lat4, lon4)
+      if dist4 == 0.0: dist4 = 0.01
+      #print('Point4 at ({:.7f},{:.7f}), elev: {:.2f}, dist: {:.2f}'.format(lat4, lon4, elev4, dist4))
+      w += 1/dist4
+      elev += elev4/dist4
+
+      if w > 0:
+        elev = elev/w
 
     s = '{:.2f}'.format(elev) # don't use round()
     elev = float(s)
@@ -206,10 +246,10 @@ def get_elev_idw(point):
     #X = np.array([lon1, lon, lon2])
     #Y = np.array([lat1, lat, lat3])
     #Z = np.array([[elev1, np.nan, elev2], [np.nan, elev, np.nan], [elev3, np.nan, elev4]])
-    #plot_elev(X, Y, Z, 'IDW')
+    #plot_elev(X, Y, Z, it)
 
     diff = elev - point.elevation
-    #print('Point at ({:.9f},{:.9f}), srtm_idw: {:.3f}, diff: {:.3f}'.format(lat, lon, elev, diff))
+    #print('Point at ({:.7f},{:.7f}), elev_{}: {:.2f}, diff: {:.2f}'.format(lat, lon, it, elev, diff))
   except:
     exc_type, exc_obj, exc_tb = sys.exc_info()
     exc = traceback.format_exception_only(exc_type, exc_obj)
@@ -217,80 +257,7 @@ def get_elev_idw(point):
     errmsg = '{}({}): {}\n'.format(name, exc_tb.tb_lineno, exc[-1].strip())
     sys.stderr.write(errmsg)
   return elev
-# get_elev_idw
-
-# -----------------------------------------------------------------------------
-def get_elev_bilin(point):
-  elev = None
-  try:
-    lat = point.latitude
-    lon = point.longitude
-
-    inc = 1/3600
-
-    lat_deg = math.floor(lat)
-    lon_deg = math.floor(lon)
-    #print('lat = {:.9f}'.format(lat))
-    #print('lon = {:.9f}'.format(lon))
-    lat_sec = lat % 1
-    lon_sec = lon % 1
-    #print('lat_sec = {:.9f}'.format(lat_sec))
-    #print('lon_sec = {:.9f}'.format(lon_sec))
-    lat_idx = int(lat_sec * 3600)
-    lon_idx = int(lon_sec * 3600)
-    #print('lat_idx = {}'.format(lat_idx))
-    #print('lon_idx = {}'.format(lon_idx))
-
-    data = gdata[lat_deg][lon_deg]
-
-    lat1 = lat_deg + lat_idx * inc
-    lon1 = lon_deg + lon_idx * inc
-    elev1 = data[lat_idx][lon_idx]
-    #print('Base point at ({:.9f},{:.9f}), elev: {:.3f}'.format(lat1, lon1, elev1))
-
-    lat2 = lat_deg + lat_idx * inc
-    lon2 = lon_deg + (lon_idx + 1) * inc
-    elev2 = data[lat_idx][lon_idx+1]
-
-    lat3 = lat_deg + (lat_idx + 1) * inc
-    lon3 = lon_deg + lon_idx * inc
-    elev3 = data[lat_idx+1][lon_idx]
-
-    lat4 = lat_deg + (lat_idx + 1) * inc
-    lon4 = lon_deg + (lon_idx + 1) * inc
-    elev4 = data[lat_idx+1][lon_idx+1]
-
-    # bilinear interpolaton
-    R1 = (lon2 - lon)/(lon2 - lon1)*elev1 + (lon - lon1)/(lon2 - lon1)*elev2
-    R2 = (lon2 - lon)/(lon2 - lon1)*elev3 + (lon - lon1)/(lon2 - lon1)*elev4
-    elev = (lat3 - lat)/(lat3 - lat1)*R1 + (lat - lat1)/(lat3 - lat1)*R2
-
-    s = '{:.2f}'.format(elev) # don't use round()
-    elev = float(s)
-
-    #X = [lon1, lon2]
-    #Y = [lat1, lat3]
-    #Z = [elev1, elev2, elev3, elev4]
-    #spline = interp2d(X, Y, Z, kind='linear')
-    #Xp = [lon]
-    #Yp = [lat]
-    #Zp = spline(Xp, Yp) # should be the the same as above
-
-    #X = np.array([lon1, lon, lon2])
-    #Y = np.array([lat1, lat, lat3])
-    #Z = np.array([[elev1, np.nan, elev2], [np.nan, elev, np.nan], [elev3, np.nan, elev4]])
-    #plot_elev(X, Y, Z, 'Bilinear')
-
-    diff = elev - point.elevation
-    #print('Point at ({:.9f},{:.9f}), srtm_bil: {:.3f}, diff: {:.3f}'.format(lat, lon, elev, diff))
-  except:
-    exc_type, exc_obj, exc_tb = sys.exc_info()
-    exc = traceback.format_exception_only(exc_type, exc_obj)
-    name = sys._getframe().f_code.co_name
-    errmsg = '{}({}): {}\n'.format(name, exc_tb.tb_lineno, exc[-1].strip())
-    sys.stderr.write(errmsg)
-  return elev
-# get_elev_bilin
+# get_elev
 
 # -----------------------------------------------------------------------------
 def procfile(gpxname):
@@ -314,18 +281,30 @@ def procfile(gpxname):
       if bounds.max_longitude > abounds.max_longitude:
         abounds.max_longitude = bounds.max_longitude
 
-    min_lat = math.floor(abounds.min_latitude)
-    max_lat = math.floor(abounds.max_latitude)
-    min_lon = math.floor(abounds.min_longitude)
-    max_lon = math.floor(abounds.max_longitude)
-    #sys.stderr.write('min_latitude: {} -> {}\n'.format(abounds.min_latitude, min_lat))
-    #sys.stderr.write('max_latitude: {} -> {}\n'.format(abounds.max_latitude, max_lat))
-    #sys.stderr.write('min_longitude: {} -> {}\n'.format(abounds.min_longitude, min_lon))
-    #sys.stderr.write('max_longitude: {} -> {}\n'.format(abounds.max_longitude, max_lon))
+    #abounds.min_latitude = -45.99940
+    #abounds.max_latitude = -46.00050
+    #abounds.min_longitude = 13.00025
+    #abounds.max_longitude = 13.00050
+
+    inc = 1/3600
+    if source == 'alos':
+      min_lat_sec = abounds.min_latitude % 1
+      if min_lat_sec < inc: abounds.min_latitude -= 2*inc
+      min_lon_sec = abounds.min_longitude % 1
+      if min_lon_sec < inc: abounds.min_longitude -= 2*inc
+
+    min_lat = abs(math.floor(abounds.min_latitude))
+    max_lat = abs(math.floor(abounds.max_latitude))
+    min_lon = abs(math.floor(abounds.min_longitude))
+    max_lon = abs(math.floor(abounds.max_longitude))
+    #print('min_latitude: {} -> {}'.format(abounds.min_latitude, min_lat))
+    #print('max_latitude: {} -> {}'.format(abounds.max_latitude, max_lat))
+    #print('min_longitude: {} -> {}'.format(abounds.min_longitude, min_lon))
+    #print('max_longitude: {} -> {}'.format(abounds.max_longitude, max_lon))
     if min_lat == max_lat and min_lon == max_lon:
-      sys.stderr.write('Bounding box: {} {} (1 SRTM file)\n'.format(min_lat, min_lon))
+      sys.stderr.write('Bounding box: {} {} (1 data file)\n'.format(min_lat, min_lon))
     else:
-      sys.stderr.write('Bounding box: {} {} -> {} {} ({} SRTM files)\n'.format(min_lat, min_lon, max_lat, max_lon, \
+      sys.stderr.write('Bounding box: {} {} -> {} {} ({} data files)\n'.format(min_lat, min_lon, max_lat, max_lon, \
                        (max_lat - min_lat + 1) * (max_lon - min_lon + 1)))
 
     gdata = {}
@@ -333,18 +312,34 @@ def procfile(gpxname):
       gdata[lat] = {}
       for lon in range(min_lon, max_lon+1):
         if lat < 0:
-          if lon < 0: fname = 's{:02d}_w{:03d}_1arc_v3.pickle'.format(abs(lat), abs(lon))
-          else: fname = 's{:02d}_e{:03d}_1arc_v3.pickle'.format(abs(lat), lon)
+          if lon < 0:
+            if source == 'srtm':
+              fname = 's{:02d}_w{:03d}_1arc_v3.pickle'.format(abs(lat), abs(lon))
+            else: # alos
+              fname = 'S{:03d}W{:03d}_AVE_EXT.pickle'.format(abs(lat), abs(lon))
+          else:
+            if source == 'srtm':
+              fname = 's{:02d}_e{:03d}_1arc_v3.pickle'.format(abs(lat), lon)
+            else: # alos
+              fname = 'S{:03d}E{:03d}_AVE_EXT.pickle'.format(abs(lat), abs(lon))
         else:
-          if lon < 0: fname = 'n{:02d}_w{:03d}_1arc_v3.pickle'.format(lat, abs(lon))
-          else: fname = 'n{:02d}_e{:03d}_1arc_v3.pickle'.format(lat, lon)
+          if lon < 0:
+            if source == 'srtm':
+              fname = 'n{:02d}_w{:03d}_1arc_v3.pickle'.format(lat, abs(lon))
+            else: # alos
+              fname = 'N{:03d}W{:03d}_AVE_EXT.pickle'.format(lat, abs(lon))
+          else:
+            if source == 'srtm':
+              fname = 'n{:02d}_e{:03d}_1arc_v3.pickle'.format(lat, lon)
+            else: # alos
+              fname = 'N{:03d}E{:03d}_AVE_EXT.pickle'.format(lat, abs(lon))
 
         if datadir == '<prog>{}data'.format(os.sep):
           fpath = '{}data{}{}'.format(where, os.sep, fname)
         else:
           fpath = '{}{}{}'.format(datadir, os.sep, fname)
         if not os.path.isfile(fpath):
-          raise ImportError('missing {}'.format(fname))
+          raise ImportError('missing {}'.format(fpath))
 
         sys.stderr.write('Reading {}\n'.format(fpath))
         fd = open(fpath, 'rb')
@@ -358,19 +353,17 @@ def procfile(gpxname):
 
     #pprint(('gdata', gdata))
 
-    if interp == 'bilinear':
-      get_elev = get_elev_bilin; ext = 'bil'
-    else:
-      get_elev = get_elev_idw; ext = 'idw'
+    if interp == 'bilinear': it = 'bil'
+    else: it = 'idw'
 
     for track in gpx.tracks:
       for segment in track.segments:
         for point in segment.points:
-          #print('Point at ({:.9f},{:.9f}), elev: {:.3f}'.format(point.latitude, point.longitude, point.elevation))
-          point.elevation = get_elev(point)
+          #print('Point at ({:.7f},{:.7f}), elev: {:.2f}'.format(point.latitude, point.longitude, point.elevation))
+          point.elevation = get_elev(point, it)
           #print()
 
-    gpxname = gpxname.replace('.gpx', '-{}.gpx'.format(ext))
+    gpxname = gpxname.replace('.gpx', '-{}-{}.gpx'.format(source, it))
     fd = open(gpxname, 'w')
     sys.stderr.write('Writing {}\n'.format(gpxname))
     fd.write(gpx.to_xml())
@@ -387,25 +380,29 @@ def procfile(gpxname):
 
 # =============================================================================
 def main(argv):
-  global where, prog, interp, datadir, plot
+  global where, prog, source, interp, datadir, plot
 
-# argv = ['srtm.py', 'sample.gpx']
+# argv = ['gpxsrtm.py', 'test.gpx']
   where = ntdirname(argv[0])
   prog = ntbasename(argv[0]).replace('.py', '').replace('.PY', '')
 
   parser = argparse.ArgumentParser(description='Provides elevation for specified geographic coordinates',
                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('inp_files', metavar='<input.gpx>', nargs='+',
-                       help='Input GPX file(s)')
+                       help='Input file(s) in GPX format')
+  parser.add_argument('-s', metavar='<source>', dest='source',
+                      choices=['srtm', 'alos'], default='srtm',
+                      help='Data source: srtm or alos')
   parser.add_argument('-i', metavar='<interp>', dest='interp',
                       choices=['bilinear', 'idw'], default='bilinear',
                       help='Interpolation type: bilinear or idw')
   parser.add_argument('-d', metavar='<datadir>', default='<prog>{}data'.format(os.sep),
-                      dest='datadir', help='SRTM data directory')
+                      dest='datadir', help='SRTM/ALOS data directory')
   parser.add_argument('-p', action='store_true', default=False, dest='plot',
-                       help='Plot read SRTM data')
+                       help='Plot read SRTM/ALOS data')
 
   args = parser.parse_args()
+  source = args.source
   interp = args.interp
   datadir = args.datadir
   plot = args.plot

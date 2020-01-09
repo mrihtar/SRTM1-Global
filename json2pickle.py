@@ -1,6 +1,6 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-prog_ver = 'json2pickle v1.0 Copyright (c) 2019-2020 Matjaz Rihtar'
+prog_ver = 'json2pickle v1.1 Copyright (c) 2019-2020 Matjaz Rihtar'
 import sys, os
 import ntpath
 import traceback
@@ -12,7 +12,8 @@ def ntdirname(path):
   try:
     head, tail = ntpath.split(path)
     dirname = head or ntpath.dirname(head)
-  except: dirname = '.'
+  except: dirname = ''
+  if len(dirname) == 0: dirname = '.'
   if dirname.endswith(os.sep):
     return dirname
   else:
