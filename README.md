@@ -1,8 +1,10 @@
 ## SRTM1-Global and AW3D30
 
 This repository is a collection of python scripts for parsing and using
-[SRTM 1 Arc-Second Global] (30m) elevation data from USGS/NASA and
-[ALOS World 3D-30m (AW3D30)] elevation data from &copy; JAXA.
+[SRTM 1 Arc-Second Global] (30m) elevation data from USGS/NASA
+<img src="images/usgs_logo.png" height="12px"> and
+[ALOS World 3D-30m (AW3D30)] elevation data from &copy; JAXA
+<img src="images/jaxa_logo.png" height="12px">.
 
 With **`gpxsrtm.py`** you can update the elevations in GPX tracks.
 
@@ -44,7 +46,7 @@ The tools in this repository recognize and read **all three formats**.
 
 Because of different formats and faster processing of actual tasks the
 downloaded data must first be converted to internal Python representation
-(pickle) with the supplied tool **`prepare.py`**.
+("pickle") with the supplied tool **`prepare.py`**.
 
 ### Interpolation
 
@@ -102,7 +104,7 @@ Reading N047E016_AVE_DSM.pickle
 Writing N046E015_AVE_EXT.pickle
 ```
 
-The resulting `N046E015_AVE_EXT.pickle` is of size 3601 x 3601 and ready to
+The resulting `N046E015_AVE_EXT.pickle` is of size 3601 x 3601 and is ready to
 be used for GPX elevation update.
 
 ### GPX elevation update
@@ -114,12 +116,30 @@ Example:
 $ gpxsrtm.py test-s17_w068.gpx
 Bounding box: -17 -68 (1 SRTM file)
 Reading data/s17_w068_1arc_v3.pickle
-Writing test-s17_w068-bil.gpx
+Writing test-s17_w068-srtm-bil.gpx
 ```
 
-**`gpxsrtm.py`** expects preprocessed SRTM data files (pickles) in **`data`**
-subdirectory, but you can also specify the location from command line (see
-**`-h`** switch).
+**`gpxsrtm.py`** expects preprocessed SRTM/ALOS data files ("pickles") in
+**`data`** subdirectory, but you can also specify the location from command
+line (see **`-h`** switch):
+
+```
+$ gpxsrtm.py -h
+Usage: gpxsrtm.py [-h] [-s <source>] [-i <interp>] [-d <datadir>] [-p]
+                  <input.gpx> [<input.gpx> ...]
+
+Provides elevation for specified geographic coordinates
+
+positional arguments:
+  <input.gpx>   Input file(s) in GPX format
+
+optional arguments:
+  -h, --help    show this help message and exit
+  -s <source>   Data source: srtm or alos (default: srtm)
+  -i <interp>   Interpolation type: bilinear or idw (default: bilinear)
+  -d <datadir>  SRTM/ALOS data directory (default: <prog>\data)
+  -p            Plot read SRTM/ALOS data (default: False)
+```
 
 This tool uses the following interpolations (selectable) for calculating
 the elevations between the supplied points from SRTM data files:
@@ -137,7 +157,8 @@ the elevations between the supplied points from SRTM data files:
 Additional tools for converting "pickles" to JSON format (and vice versa) are
 available as **`pickle2json.py`** and **`json2pickle.py`**.
 The preprocessed data is a matrix of size 3601 x 3601 with the (0, 0)
-coordinates in lower left corner with no void/NaN values.
+coordinates in lower left corner with no void/NaN values. ALOS data values 
+start with 0.5 offset on coordinate axes.
 
 You can also print the data matrix as tab separated values with
 **`printdata.py`**.

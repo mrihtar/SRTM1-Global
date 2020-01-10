@@ -356,6 +356,11 @@ def procfile(gpxname):
     if interp == 'bilinear': it = 'bil'
     else: it = 'idw'
 
+    for waypoint in gpx.waypoints:
+      #print('Waypoint at ({:.7f},{:.7f}), elev: {:.2f}'.format(waypoint.latitude, waypoint.longitude, waypoint.elevation))
+      waypoint.elevation = get_elev(waypoint, it)
+      #print()
+
     for track in gpx.tracks:
       for segment in track.segments:
         for point in segment.points:
