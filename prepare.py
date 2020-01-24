@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-prog_ver = 'prepare v1.8 Copyright (c) 2019-2020 Matjaz Rihtar'
+prog_ver = 'prepare v1.11 Copyright (c) 2019-2020 Matjaz Rihtar'
 # py_ver = sys.version_info.major
 import sys, os, glob, re
 import ntpath, argparse
 import traceback
 from pprint import pprint
 
+import math
 from struct import unpack
 import pickle, json
 
@@ -469,8 +470,18 @@ def fill_missing(lat0, lon0, Z, raster_type):
     else: # PixelIsPoint (0,0)
       endp = True # srtm last line is repeated as first line in next tile
 
-    X = np.linspace(lon0, lon0+1, num=size, endpoint=endp, dtype=np.float_)
-    Y = np.linspace(lat0, lat0+1, num=size, endpoint=endp, dtype=np.float_)
+    if lon0 < 0:
+      alon0 = abs(lon0)
+      X = np.linspace(alon0, alon0-1, num=size, endpoint=endp, dtype=np.float_)
+    else:
+      X = np.linspace(lon0, lon0+1, num=size, endpoint=endp, dtype=np.float_)
+    #print('X = {}'.format(X))
+    if lat0 < 0:
+      alat0 = abs(lat0)
+      Y = np.linspace(alat0, alat0-1, num=size, endpoint=endp, dtype=np.float_)
+    else:
+      Y = np.linspace(lat0, lat0+1, num=size, endpoint=endp, dtype=np.float_)
+    #print('Y = {}'.format(Y))
 
     Z = np.array(Z).astype(np.float_)
     #Z = np.array(np.random.uniform(0.0, 3000.0, (size, size))).astype(np.float_)
@@ -507,17 +518,49 @@ def fill_missing(lat0, lon0, Z, raster_type):
 
 # -----------------------------------------------------------------------------
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
 import matplotlib.cm as cm
 
-def plot_tile(data, title=None):
+def plot_tile(data, x0, xinc, y0, yinc, title=None, aspect=None):
   try:
     plt.rc('figure', figsize=(9, 9))
     D = np.array(data)
+    fig, ax = plt.subplots()
     cmap = cm.terrain
     cmap.set_bad(color='black')
-    plt.imshow(D, origin='lower', cmap=cmap)
-    if title is not None:
-      plt.title(title)
+    im = ax.imshow(D, origin='lower', cmap=cmap)
+    if aspect is not None:
+      ax.set_aspect(aspect)
+    #else:
+    #  mercator_aspect = 1 / math.cos(math.radians(central_lat))
+    #  ax.set_aspect(mercator_aspect)
+    plt.colorbar(im, fraction=0.0457, pad=0.04, label='Elevation [m]')
+
+    xmin = 0; xmax = len(D[0])
+    xv = []; xvs = []
+    xstep = int((xmax - xmin) / 8)
+    if x0 < 0:
+      tmp = xmin; xmin = xmax + 1; xmax = tmp
+      xstep = -xstep
+    for x in range(xmin, xmax, xstep):
+      xv.append(x)
+      xvs.append('{:.1f}'.format(x0 + x * xinc))
+    plt.xticks(xv, xvs)
+    plt.xlabel('Longitude')
+
+    ymin = 0; ymax = len(D)
+    yv = []; yvs = []
+    ystep = int((ymax - ymin) / 5)
+    if y0 < 0:
+      tmp = ymin; ymin = ymax + 1; ymax = tmp
+      ystep = -ystep
+    for y in range(ymin, ymax, ystep):
+      yv.append(y)
+      yvs.append('{:.1f}'.format(y0 + y * yinc))
+    plt.yticks(yv, yvs)
+    plt.ylabel('Latitude')
+
+    if title is not None: plt.title(title)
     plt.show()
   except:
     exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -549,24 +592,28 @@ def procfile(fpath):
     if data is None:
       raise ImportError('error loading {}'.format(fpath))
 
-    if plot:
-      plot_tile(data, '{} (raw)'.format(fname))
-
     lat0 = 0; lon0 = 0
 
     fn = fname.split('_')
     if fn[0].startswith('n') or fn[0].startswith('s'): # SRTM1
       lat0 = int(fn[0][1:])
+      if fn[0].startswith('s'): lat0 = -lat0
     if fn[1].startswith('e') or fn[1].startswith('w'): # SRTM1
       lon0 = int(fn[1][1:])
+      if fn[1].startswith('w'): lon0 = -lon0
     if fn[0].startswith('N') or fn[0].startswith('S'): # ALOS
       lat0 = int(fn[0][1:4])
+      if fn[0][0].startswith('S'): lat0 = -lat0
       lon0 = int(fn[0][5:8])
+      if fn[0][4].startswith('W'): lon0 = -lon0
+
+    if plot:
+      plot_tile(data, lon0, 1/3600, lat0, 1/3600, '{} (raw)'.format(fname))
 
     data, changed = fill_missing(lat0, lon0, data, raster_type)
 
     if plot and changed:
-      plot_tile(data, '{} (interpolated)'.format(fname))
+      plot_tile(data, lon0, 1/3600, lat0, 1/3600, '{} (interpolated)'.format(fname))
 
     sys.stderr.write('Writing {}\n'.format(ppath))
     fd = open(ppath, 'wb')

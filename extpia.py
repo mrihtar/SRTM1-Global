@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-prog_ver = 'extpia v1.0 Copyright (c) 2019-2020 Matjaz Rihtar'
+prog_ver = 'extpia v1.3 Copyright (c) 2019-2020 Matjaz Rihtar'
 # py_ver = sys.version_info.major
 import sys, os, glob, re
 import ntpath, argparse
 import traceback
 from pprint import pprint
 
+import math
 from struct import unpack
 import pickle, json
 
@@ -34,17 +35,49 @@ def ntbasename(path):
 # -----------------------------------------------------------------------------
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
 import matplotlib.cm as cm
 
-def plot_tile(data, title=None):
+def plot_tile(data, x0, xinc, y0, yinc, title=None, aspect=None):
   try:
     plt.rc('figure', figsize=(9, 9))
     D = np.array(data)
+    fig, ax = plt.subplots()
     cmap = cm.terrain
     cmap.set_bad(color='black')
-    plt.imshow(D, origin='lower', cmap=cmap)
-    if title is not None:
-      plt.title(title)
+    im = ax.imshow(D, origin='lower', cmap=cmap)
+    if aspect is not None:
+      ax.set_aspect(aspect)
+    #else:
+    #  mercator_aspect = 1 / math.cos(math.radians(central_lat))
+    #  ax.set_aspect(mercator_aspect)
+    plt.colorbar(im, fraction=0.0457, pad=0.04, label='Elevation [m]')
+
+    xmin = 0; xmax = len(D[0])
+    xv = []; xvs = []
+    xstep = int((xmax - xmin) / 8)
+    if x0 < 0:
+      tmp = xmin; xmin = xmax + 1; xmax = tmp
+      xstep = -xstep
+    for x in range(xmin, xmax, xstep):
+      xv.append(x)
+      xvs.append('{:.1f}'.format(x0 + x * xinc))
+    plt.xticks(xv, xvs)
+    plt.xlabel('Longitude')
+
+    ymin = 0; ymax = len(D)
+    yv = []; yvs = []
+    ystep = int((ymax - ymin) / 5)
+    if y0 < 0:
+      tmp = ymin; ymin = ymax + 1; ymax = tmp
+      ystep = -ystep
+    for y in range(ymin, ymax, ystep):
+      yv.append(y)
+      yvs.append('{:.1f}'.format(y0 + y * yinc))
+    plt.yticks(yv, yvs)
+    plt.ylabel('Latitude')
+
+    if title is not None: plt.title(title)
     plt.show()
   except:
     exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -80,31 +113,36 @@ def procfile(fpath):
       return rc
 
     lat0 = int(fn[0][1:4])
+    if fn[0][0].startswith('S'): lat0 = -lat0
     lon0 = int(fn[0][5:8])
+    if fn[0][4].startswith('W'): lon0 = -lon0
 
     fns = []
     for ii in range(4):
       fns.append({})
 
     fns[0]['name'] = fpath
-    if fn[0][0] == 'N':
-      if fn[0][4] == 'E':
+    if lat0 < 0: # fn[0][0] == 'S'
+      alat0 = abs(lat0)
+      if lon0 < 0: # fn[0][4] == 'W'
+        alon0 = abs(lon0)
+        fns[1]['name'] = '{}S{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, alat0, alon0-1)
+        fns[2]['name'] = '{}S{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, alat0-1, alon0)
+        fns[3]['name'] = '{}S{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, alat0-1, alon0-1)
+      else: # fn[0][4] == 'E'
+        fns[1]['name'] = '{}S{:03d}E{:03d}_AVE_DSM.pickle'.format(fdir, alat0, lon0+1)
+        fns[2]['name'] = '{}S{:03d}E{:03d}_AVE_DSM.pickle'.format(fdir, alat0-1, lon0)
+        fns[3]['name'] = '{}S{:03d}E{:03d}_AVE_DSM.pickle'.format(fdir, alat0-1, lon0+1)
+    else: # fn[0][0] == 'N'
+      if lon0 < 0: # fn[0][4] == 'W'
+        alon0 = abs(lon0)
+        fns[1]['name'] = '{}N{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, lat0, alon0-1)
+        fns[2]['name'] = '{}N{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, lat0+1, alon0)
+        fns[3]['name'] = '{}N{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, lat0+1, alon0-1)
+      else: # fn[0][4] == 'E'
         fns[1]['name'] = '{}N{:03d}E{:03d}_AVE_DSM.pickle'.format(fdir, lat0, lon0+1)
         fns[2]['name'] = '{}N{:03d}E{:03d}_AVE_DSM.pickle'.format(fdir, lat0+1, lon0)
         fns[3]['name'] = '{}N{:03d}E{:03d}_AVE_DSM.pickle'.format(fdir, lat0+1, lon0+1)
-      else:
-        fns[1]['name'] = '{}N{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, lat0, lon0+1)
-        fns[2]['name'] = '{}N{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, lat0+1, lon0)
-        fns[3]['name'] = '{}N{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, lat0+1, lon0+1)
-    else:
-      if fn[0][4] == 'E':
-        fns[1]['name'] = '{}S{:03d}E{:03d}_AVE_DSM.pickle'.format(fdir, lat0, lon0+1)
-        fns[2]['name'] = '{}S{:03d}E{:03d}_AVE_DSM.pickle'.format(fdir, lat0+1, lon0)
-        fns[3]['name'] = '{}S{:03d}E{:03d}_AVE_DSM.pickle'.format(fdir, lat0+1, lon0+1)
-      else:
-        fns[1]['name'] = '{}S{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, lat0, lon0+1)
-        fns[2]['name'] = '{}S{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, lat0+1, lon0)
-        fns[3]['name'] = '{}S{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, lat0+1, lon0+1)
 
     for ii in range(4):
       fpath_ = fns[ii]['name']
@@ -131,7 +169,7 @@ def procfile(fpath):
     data[max_lat_idx].extend([data3[0][0]])
 
     if plot:
-      plot_tile(data, '{} (raw)'.format(fname))
+      plot_tile(data, lon0, 1/3600, lat0, 1/3600, '{} (raw)'.format(fname))
 
     #with open('0.ext', 'w') as fd:
     #  print_matrix(data, fd)

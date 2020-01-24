@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-prog_ver = 'gpxsrtm v1.11 Copyright (c) 2019-2020 Matjaz Rihtar'
+prog_ver = 'gpxsrtm v1.15 Copyright (c) 2019-2020 Matjaz Rihtar'
 # py_ver = sys.version_info.major
 import sys, os, glob, re
 import ntpath, argparse
@@ -47,18 +47,50 @@ def ntbasename(path):
 
 # -----------------------------------------------------------------------------
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
 import matplotlib.cm as cm
 from mpl_toolkits.mplot3d import Axes3D # needed for 3d projection
 
-def plot_tile(data, title=None):
+def plot_tile(data, x0, xinc, y0, yinc, title=None, aspect=None):
   try:
     plt.rc('figure', figsize=(9, 9))
     D = np.array(data)
+    fig, ax = plt.subplots()
     cmap = cm.terrain
     cmap.set_bad(color='black')
-    plt.imshow(D, origin='lower', cmap=cmap)
-    if title is not None:
-      plt.title(title)
+    im = ax.imshow(D, origin='lower', cmap=cmap)
+    if aspect is not None:
+      ax.set_aspect(aspect)
+    #else:
+    #  mercator_aspect = 1 / math.cos(math.radians(central_lat))
+    #  ax.set_aspect(mercator_aspect)
+    plt.colorbar(im, fraction=0.0457, pad=0.04, label='Elevation [m]')
+
+    xmin = 0; xmax = len(D[0])
+    xv = []; xvs = []
+    xstep = int((xmax - xmin) / 8)
+    if x0 < 0:
+      tmp = xmin; xmin = xmax + 1; xmax = tmp
+      xstep = -xstep
+    for x in range(xmin, xmax, xstep):
+      xv.append(x)
+      xvs.append('{:.1f}'.format(x0 + x * xinc))
+    plt.xticks(xv, xvs)
+    plt.xlabel('Longitude')
+
+    ymin = 0; ymax = len(D)
+    yv = []; yvs = []
+    ystep = int((ymax - ymin) / 5)
+    if y0 < 0:
+      tmp = ymin; ymin = ymax + 1; ymax = tmp
+      ystep = -ystep
+    for y in range(ymin, ymax, ystep):
+      yv.append(y)
+      yvs.append('{:.1f}'.format(y0 + y * yinc))
+    plt.yticks(yv, yvs)
+    plt.ylabel('Latitude')
+
+    if title is not None: plt.title(title)
     plt.show()
   except:
     exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -97,9 +129,7 @@ def plot_elev(X, Y, Z, title=None):
     ax.scatter3D(X1, Y1, Z1, color='black')
 
     ax.ticklabel_format(useOffset=False)
-    if title is not None:
-      plt.title(title) # fontsize=16
-
+    if title is not None: plt.title(title) # fontsize=16
     plt.show()
   except:
     exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -113,14 +143,11 @@ def plot_elev(X, Y, Z, title=None):
 # Haversine distance in meters
 # See http://www.movable-type.co.uk/scripts/latlong.html
 
-def rad(x):
-  return x * math.pi / 180
-
 def distance(lat1, lon1, lat2, lon2):
-  delta_lat = rad(lat1 - lat2)
-  delta_lon = rad(lon1 - lon2)
-  lat1 = rad(lat1)
-  lat2 = rad(lat2)
+  delta_lat = math.radians(lat1 - lat2)
+  delta_lon = math.radians(lon1 - lon2)
+  lat1 = math.radians(lat1)
+  lat2 = math.radians(lat2)
 
   a = pow(math.sin(delta_lat/2), 2) + \
       math.cos(lat1) * math.cos(lat2) * pow(math.sin(delta_lon/2), 2)
@@ -133,41 +160,65 @@ def distance(lat1, lon1, lat2, lon2):
 def get_elev(point, it='bil'):
   elev = None
   try:
+    #print('----------------------------------------')
+    #print('Processing "{}"'.format(point.name))
     lat = point.latitude
     lon = point.longitude
     #print('lat = {:.7f}'.format(lat))
     #print('lon = {:.7f}'.format(lon))
 
-    inc = 1/3600
+    inc = 1/3600; rinc = 1 - inc    # 0.0002778, 0.9997223
+    inc2 = 1/7200; rinc2 = 1 - inc2 # 0.0001389, 0.9998612
 
     lat_deg = math.floor(lat)
     lon_deg = math.floor(lon)
     #print('lat_deg = {}'.format(lat_deg))
     #print('lon_deg = {}'.format(lon_deg))
-    lat_sec = lat % 1
-    lon_sec = lon % 1
-    #print('lat_sec = {:.7f}'.format(lat_sec))
-    #print('lon_sec = {:.7f}'.format(lon_sec))
+
+    alat_sec = abs(lat) % 1
+    alon_sec = abs(lon) % 1
+    #print('alat_sec = {:.7f}'.format(alat_sec))
+    #print('alon_sec = {:.7f}'.format(alon_sec))
     if source == 'alos':
-      ofs = inc
-      if lat_sec < inc: 
-        lat_deg -= 1
-        lat_sec += 3599/3600
-        #print('fixed lat_deg = {}'.format(lat_deg))
+      ofs = inc2
+      if lat < 0:
+        if alat_sec > rinc2:
+          lat_deg -= 1
+          #print('fixed lat_deg = {}'.format(lat_deg))
+          alat_sec = 1 - inc2
+        else:
+          alat_sec = 1 - alat_sec - inc2
       else:
-        lat_sec -= inc
-      if lon_sec < inc:
-        lon_deg -= 1
-        lon_sec += 3599/3600
-        #print('fixed lon_deg = {}'.format(lon_deg))
+        if alat_sec < inc2:
+          lat_deg -= 1
+          #print('fixed lat_deg = {}'.format(lat_deg))
+          alat_sec = 1 - inc2
+        else:
+          alat_sec = alat_sec - inc2
+
+      if lon < 0:
+        if alon_sec > rinc2:
+          lon_deg -= 1
+          #print('fixed lon_deg = {}'.format(lon_deg))
+          alon_sec = 1 - inc2
+        else:
+          alon_sec = 1 - alon_sec - inc2
       else:
-        lon_sec -= inc
-      #print('fixed lat_sec = {:.7f}'.format(lat_sec))
-      #print('fixed lon_sec = {:.7f}'.format(lon_sec))
+        if alon_sec < inc2:
+          lon_deg -= 1
+          #print('fixed lon_deg = {}'.format(lon_deg))
+          alon_sec = 1 - inc2
+        else:
+          alon_sec = alon_sec - inc2
     else:
       ofs = 0
-    lat_idx = int(lat_sec * 3600)
-    lon_idx = int(lon_sec * 3600)
+      if lat < 0:
+        alat_sec = 1 - alat_sec
+      if lon < 0:
+        alon_sec = 1 - alon_sec
+
+    lat_idx = int(alat_sec * 3600)
+    lon_idx = int(alon_sec * 3600)
     #print('lat_idx = {}'.format(lat_idx))
     #print('lon_idx = {}'.format(lon_idx))
 
@@ -249,7 +300,7 @@ def get_elev(point, it='bil'):
     #plot_elev(X, Y, Z, it)
 
     diff = elev - point.elevation
-    #print('Point at ({:.7f},{:.7f}), elev_{}: {:.2f}, diff: {:.2f}'.format(lat, lon, it, elev, diff))
+    #print('Point at ({:.7f},{:.7f}), elev: {:.2f}, elev_{}: {:.2f}, diff: {:.2f}'.format(lat, lon, point.elevation, it, elev, diff))
   except:
     exc_type, exc_obj, exc_tb = sys.exc_info()
     exc = traceback.format_exception_only(exc_type, exc_obj)
@@ -281,58 +332,89 @@ def procfile(gpxname):
       if bounds.max_longitude > abounds.max_longitude:
         abounds.max_longitude = bounds.max_longitude
 
-    #abounds.min_latitude = -45.99940
-    #abounds.max_latitude = -46.00050
+    #abounds.min_latitude = 45.99990
+    #abounds.max_latitude = 46.00050
     #abounds.min_longitude = 13.00025
     #abounds.max_longitude = 13.00050
+    #print('min_latitude: {:.7f}'.format(abounds.min_latitude))
+    #print('max_latitude: {:.7f}'.format(abounds.max_latitude))
+    #print('min_longitude: {:.7f}'.format(abounds.min_longitude))
+    #print('max_longitude: {:.7f}'.format(abounds.max_longitude))
 
-    inc = 1/3600
+    inc = 1/3600; rinc = 1 - inc    # 0.0002778, 0.9997223
+    inc2 = 1/7200; rinc2 = 1 - inc2 # 0.0001389, 0.9998612
+
     if source == 'alos':
-      min_lat_sec = abounds.min_latitude % 1
-      if min_lat_sec < inc: abounds.min_latitude -= 2*inc
-      min_lon_sec = abounds.min_longitude % 1
-      if min_lon_sec < inc: abounds.min_longitude -= 2*inc
+      amin_lat_sec = abs(abounds.min_latitude) % 1
+      #print('amin_lat_sec = {:.7f}'.format(amin_lat_sec))
+      if abounds.min_latitude < 0:
+        if amin_lat_sec > rinc2: abounds.min_latitude -= inc
+      else:
+        if amin_lat_sec < inc2: abounds.min_latitude -= inc
 
-    min_lat = abs(math.floor(abounds.min_latitude))
-    max_lat = abs(math.floor(abounds.max_latitude))
-    min_lon = abs(math.floor(abounds.min_longitude))
-    max_lon = abs(math.floor(abounds.max_longitude))
-    #print('min_latitude: {} -> {}'.format(abounds.min_latitude, min_lat))
-    #print('max_latitude: {} -> {}'.format(abounds.max_latitude, max_lat))
-    #print('min_longitude: {} -> {}'.format(abounds.min_longitude, min_lon))
-    #print('max_longitude: {} -> {}'.format(abounds.max_longitude, max_lon))
+      amax_lat_sec = abs(abounds.max_latitude) % 1
+      #print('amax_lat_sec = {:.7f}'.format(amax_lat_sec))
+      if abounds.min_latitude < 0:
+        if amax_lat_sec > rinc2: abounds.max_latitude -= inc
+      else:
+        if amax_lat_sec < inc2: abounds.max_latitude -= inc
+
+      amin_lon_sec = abs(abounds.min_longitude) % 1
+      #print('amin_lon_sec = {:.7f}'.format(amin_lon_sec))
+      if abounds.min_longitude < 0:
+        if amin_lon_sec > rinc2: abounds.min_longitude -= inc
+      else:
+        if amin_lon_sec < inc2: abounds.min_longitude -= inc
+
+      amax_lon_sec = abs(abounds.max_longitude) % 1
+      #print('amax_lon_sec = {:.7f}'.format(amax_lon_sec))
+      if abounds.min_longitude < 0:
+        if amax_lon_sec > rinc2: abounds.max_longitude -= inc
+      else:
+        if amax_lon_sec < inc2: abounds.max_longitude -= inc
+
+    min_lat = math.floor(abounds.min_latitude)
+    max_lat = math.floor(abounds.max_latitude)
+    min_lon = math.floor(abounds.min_longitude)
+    max_lon = math.floor(abounds.max_longitude)
+    #print('min_latitude: {:.7f} -> {}'.format(abounds.min_latitude, min_lat))
+    #print('max_latitude: {:.7f} -> {}'.format(abounds.max_latitude, max_lat))
+    #print('min_longitude: {:.7f} -> {}'.format(abounds.min_longitude, min_lon))
+    #print('max_longitude: {:.7f} -> {}'.format(abounds.max_longitude, max_lon))
     if min_lat == max_lat and min_lon == max_lon:
       sys.stderr.write('Bounding box: {} {} (1 data file)\n'.format(min_lat, min_lon))
     else:
       sys.stderr.write('Bounding box: {} {} -> {} {} ({} data files)\n'.format(min_lat, min_lon, max_lat, max_lon, \
-                       (max_lat - min_lat + 1) * (max_lon - min_lon + 1)))
+                       (abs(max_lat - min_lat) + 1) * (abs(max_lon - min_lon) + 1)))
 
     gdata = {}
     for lat in range(min_lat, max_lat+1):
+      alat = abs(lat)
       gdata[lat] = {}
       for lon in range(min_lon, max_lon+1):
+        alon = abs(lon)
         if lat < 0:
           if lon < 0:
             if source == 'srtm':
-              fname = 's{:02d}_w{:03d}_1arc_v3.pickle'.format(abs(lat), abs(lon))
+              fname = 's{:02d}_w{:03d}_1arc_v3.pickle'.format(alat, alon)
             else: # alos
-              fname = 'S{:03d}W{:03d}_AVE_EXT.pickle'.format(abs(lat), abs(lon))
+              fname = 'S{:03d}W{:03d}_AVE_EXT.pickle'.format(alat, alon)
           else:
             if source == 'srtm':
-              fname = 's{:02d}_e{:03d}_1arc_v3.pickle'.format(abs(lat), lon)
+              fname = 's{:02d}_e{:03d}_1arc_v3.pickle'.format(alat, lon)
             else: # alos
-              fname = 'S{:03d}E{:03d}_AVE_EXT.pickle'.format(abs(lat), abs(lon))
+              fname = 'S{:03d}E{:03d}_AVE_EXT.pickle'.format(alat, lon)
         else:
           if lon < 0:
             if source == 'srtm':
-              fname = 'n{:02d}_w{:03d}_1arc_v3.pickle'.format(lat, abs(lon))
+              fname = 'n{:02d}_w{:03d}_1arc_v3.pickle'.format(lat, alon)
             else: # alos
-              fname = 'N{:03d}W{:03d}_AVE_EXT.pickle'.format(lat, abs(lon))
+              fname = 'N{:03d}W{:03d}_AVE_EXT.pickle'.format(lat, alon)
           else:
             if source == 'srtm':
               fname = 'n{:02d}_e{:03d}_1arc_v3.pickle'.format(lat, lon)
             else: # alos
-              fname = 'N{:03d}E{:03d}_AVE_EXT.pickle'.format(lat, abs(lon))
+              fname = 'N{:03d}E{:03d}_AVE_EXT.pickle'.format(lat, lon)
 
         if datadir == '<prog>{}data'.format(os.sep):
           fpath = '{}data{}{}'.format(where, os.sep, fname)
@@ -347,7 +429,7 @@ def procfile(gpxname):
         fd.close()
 
         if plot:
-          plot_tile(data, fname.replace('.pickle', ''))
+          plot_tile(data, lon, 1/3600, lat, 1/3600, fname.replace('.pickle', ''))
 
         gdata[lat][lon] = data
 
