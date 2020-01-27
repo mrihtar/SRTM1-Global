@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-prog_ver = 'prepare v1.11 Copyright (c) 2019-2020 Matjaz Rihtar'
+prog_ver = 'prepare v1.12 Copyright (c) 2019-2020 Matjaz Rihtar'
 # py_ver = sys.version_info.major
 import sys, os, glob, re
 import ntpath, argparse
@@ -320,6 +320,22 @@ def load_tif(fpath):
             if le: strips = unpack('<' + count*'I', strips_b)
             else: strips = unpack('>' + count*'I', strips_b)
             fd.seek(oldpos)
+        elif tag == 33922: # model tiepoint tag
+          oldpos = fd.tell()
+          fd.seek(offset)
+          mttags_b = fd.read(tipe_len * count)
+          if le: mttags = unpack('<' + count*'d', mttags_b)
+          else: mttags = unpack('>' + count*'d', mttags_b)
+          #print(mttags)
+          fd.seek(oldpos)
+        elif tag == 33550: # model pixel scale tag
+          oldpos = fd.tell()
+          fd.seek(offset)
+          mpstags_b = fd.read(tipe_len * count)
+          if le: mpstags = unpack('<' + count*'d', mpstags_b)
+          else: mpstags = unpack('>' + count*'d', mpstags_b)
+          #print(mpstags)
+          fd.seek(oldpos)
         elif tag == 34735: # geokey directory tag
           oldpos = fd.tell()
           fd.seek(offset)
