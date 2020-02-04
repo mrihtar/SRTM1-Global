@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-prog_ver = 'gpxsrtm v1.15 Copyright (c) 2019-2020 Matjaz Rihtar'
+prog_ver = 'gpxsrtm v1.16 Copyright (c) 2019-2020 Matjaz Rihtar'
 # py_ver = sys.version_info.major
 import sys, os, glob, re
 import ntpath, argparse
@@ -316,7 +316,7 @@ def procfile(gpxname):
 
   rc = 0
   try:
-    fd = open(gpxname, 'r')
+    fd = open(gpxname, 'r', encoding='utf-8')
     gpx = gpxpy.parse(fd)
     fd.close()
 
@@ -451,7 +451,7 @@ def procfile(gpxname):
           #print()
 
     gpxname = gpxname.replace('.gpx', '-{}-{}.gpx'.format(source, it))
-    fd = open(gpxname, 'w')
+    fd = open(gpxname, 'w', encoding='utf-8')
     sys.stderr.write('Writing {}\n'.format(gpxname))
     fd.write(gpx.to_xml())
     fd.close()

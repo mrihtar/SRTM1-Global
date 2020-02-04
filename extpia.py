@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-prog_ver = 'extpia v1.3 Copyright (c) 2019-2020 Matjaz Rihtar'
+prog_ver = 'extpia v1.4 Copyright (c) 2019-2020 Matjaz Rihtar'
 # py_ver = sys.version_info.major
 import sys, os, glob, re
 import ntpath, argparse
@@ -155,7 +155,7 @@ def procfile(fpath):
     max_lat_idx = len(data)
     max_lon_idx = len(data[0])
 
-    #with open('0.org', 'w') as fd:
+    #with open('0.org', 'w', encoding='utf-8') as fd:
     #  print_matrix(data, fd)
 
     data1 = fns[1]['data']
@@ -171,7 +171,7 @@ def procfile(fpath):
     if plot:
       plot_tile(data, lon0, 1/3600, lat0, 1/3600, '{} (raw)'.format(fname))
 
-    #with open('0.ext', 'w') as fd:
+    #with open('0.ext', 'w', encoding='utf-8') as fd:
     #  print_matrix(data, fd)
 
     ppath = fpath.replace('DSM.pickle', 'EXT.pickle')
