@@ -169,7 +169,7 @@ You can also print the data matrix as tab separated values with
 
 [SRTM 1 Arc-Second Global]: https://www.usgs.gov/centers/eros/science/usgs-eros-archive-digital-elevation-shuttle-radar-topography-mission-srtm-1-arc
 [Shuttle Radar Topography Mission]: https://www2.jpl.nasa.gov/srtm/mission.htm
-[ALOS World 3D-30m (AW3D30)]: https://www.eorc.jaxa.jp/ALOS/en/aw3d30/
+[ALOS World 3D-30m (AW3D30)]: https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d_e.htm
 [World 3D Topographic Data]: https://www.aw3d.jp/en/
 [JPL Release 2014-321]: https://www.jpl.nasa.gov/news/news.php?release=2014-321
 [USGS EarthExplorer]: http://earthexplorer.usgs.gov
