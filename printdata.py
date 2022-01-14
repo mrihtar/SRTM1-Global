@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-prog_ver = 'printdata v1.1 Copyright (c) 2019-2020 Matjaz Rihtar'
+prog_ver = 'printdata v1.1 Copyright (c) 2019-2022 Matjaz Rihtar'
 import sys, os, glob
 import ntpath, argparse
 import traceback

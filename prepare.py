@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-prog_ver = 'prepare v1.12 Copyright (c) 2019-2020 Matjaz Rihtar'
+prog_ver = 'prepare v1.12 Copyright (c) 2019-2022 Matjaz Rihtar'
 # py_ver = sys.version_info.major
 import sys, os, glob, re
 import ntpath, argparse

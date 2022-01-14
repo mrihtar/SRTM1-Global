@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-prog_ver = 'gpxsrtm v1.16 Copyright (c) 2019-2020 Matjaz Rihtar'
+prog_ver = 'gpxsrtm v1.17 Copyright (c) 2019-2022 Matjaz Rihtar'
 # py_ver = sys.version_info.major
 import sys, os, glob, re
 import ntpath, argparse
@@ -299,8 +299,9 @@ def get_elev(point, it='bil'):
     #Z = np.array([[elev1, np.nan, elev2], [np.nan, elev, np.nan], [elev3, np.nan, elev4]])
     #plot_elev(X, Y, Z, it)
 
-    diff = elev - point.elevation
-    #print('Point at ({:.7f},{:.7f}), elev: {:.2f}, elev_{}: {:.2f}, diff: {:.2f}'.format(lat, lon, point.elevation, it, elev, diff))
+    if point.elevation is not None:
+      diff = elev - point.elevation
+      #print('Point at ({:.7f},{:.7f}), elev: {:.2f}, elev_{}: {:.2f}, diff: {:.2f}'.format(lat, lon, point.elevation, it, elev, diff))
   except:
     exc_type, exc_obj, exc_tb = sys.exc_info()
     exc = traceback.format_exception_only(exc_type, exc_obj)
@@ -398,23 +399,23 @@ def procfile(gpxname):
             if source == 'srtm':
               fname = 's{:02d}_w{:03d}_1arc_v3.pickle'.format(alat, alon)
             else: # alos
-              fname = 'S{:03d}W{:03d}_AVE_EXT.pickle'.format(alat, alon)
+              fname = 'ALPSMLC30_S{:03d}W{:03d}_EXT.pickle'.format(alat, alon)
           else:
             if source == 'srtm':
               fname = 's{:02d}_e{:03d}_1arc_v3.pickle'.format(alat, lon)
             else: # alos
-              fname = 'S{:03d}E{:03d}_AVE_EXT.pickle'.format(alat, lon)
+              fname = 'ALPSMLC30_S{:03d}E{:03d}_EXT.pickle'.format(alat, lon)
         else:
           if lon < 0:
             if source == 'srtm':
               fname = 'n{:02d}_w{:03d}_1arc_v3.pickle'.format(lat, alon)
             else: # alos
-              fname = 'N{:03d}W{:03d}_AVE_EXT.pickle'.format(lat, alon)
+              fname = 'ALPSMLC30_N{:03d}W{:03d}_EXT.pickle'.format(lat, alon)
           else:
             if source == 'srtm':
               fname = 'n{:02d}_e{:03d}_1arc_v3.pickle'.format(lat, lon)
             else: # alos
-              fname = 'N{:03d}E{:03d}_AVE_EXT.pickle'.format(lat, lon)
+              fname = 'ALPSMLC30_N{:03d}E{:03d}_EXT.pickle'.format(lat, lon)
 
         if datadir == '<prog>{}data'.format(os.sep):
           fpath = '{}data{}{}'.format(where, os.sep, fname)

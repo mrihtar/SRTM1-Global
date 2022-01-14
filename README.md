@@ -53,7 +53,7 @@ downloaded data must first be converted to internal Python representation
 Preprocessing of data also takes care of possible voids detected in data
 (*yes, some tiles may still contain voids!*) with the built-in interpolation
 (griddata/linear <sup>[LNDI]</sup>) and extrapolation (k-NN/12 neighbours
-<sup>[CKDT]</sup>).
+<sup>[cKDT]</sup>).
 
 Example of preprocessing a tile with voids:
 ```
@@ -77,7 +77,7 @@ dataset obtained by resampling of the 5-meter mesh version of the
 [World 3D Topographic Data], which is considered to be the most precise
 global-scale elevation data at this time.
 
-Current version (v2.2) released in April 2019 is an improved version with
+Current version (v3.2) released in January 2022 is an improved version with
 all data voids filled. It's available for download at [AW3D30 DSM data map]
 after registration with e-mail confirmation.
 
@@ -96,16 +96,16 @@ column and line (right and above) from surrounding tiles to be the same size
 as SRTM matrix. This can be done with the supplied tool **`extpia.py`**:
 
 ```
-$ extpia.py N046E015_AVE_DSM.pickle
-Reading N046E015_AVE_DSM.pickle
-Reading N046E016_AVE_DSM.pickle
-Reading N047E015_AVE_DSM.pickle
-Reading N047E016_AVE_DSM.pickle
-Writing N046E015_AVE_EXT.pickle
+$ extpia.py ALPSMLC30_N046E015_DSM.pickle
+Reading ALPSMLC30_N046E015_DSM.pickle
+Reading ALPSMLC30_N046E016_DSM.pickle
+Reading ALPSMLC30_N047E015_DSM.pickle
+Reading ALPSMLC30_N047E016_DSM.pickle
+Writing ALPSMLC30_N046E015_EXT.pickle
 ```
 
-The resulting `N046E015_AVE_EXT.pickle` is of size 3601 x 3601 and is ready to
-be used for GPX elevation update.
+The resulting `ALPSMLC30_N046E015_EXT.pickle` is of size 3601 x 3601 and is
+ready to be used for GPX elevation update.
 
 ### GPX elevation update
 
@@ -171,7 +171,7 @@ You can also print the data matrix as tab separated values with
 [Shuttle Radar Topography Mission]: https://www2.jpl.nasa.gov/srtm/mission.htm
 [ALOS World 3D-30m (AW3D30)]: https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d_e.htm
 [World 3D Topographic Data]: https://www.aw3d.jp/en/
-[JPL Release 2014-321]: https://www.jpl.nasa.gov/news/news.php?release=2014-321
+[JPL Release 2014-321]: https://www.jpl.nasa.gov/news/us-releases-enhanced-shuttle-land-elevation-data
 [USGS EarthExplorer]: http://earthexplorer.usgs.gov
 [AW3D30 DSM data map]: https://www.eorc.jaxa.jp/ALOS/en/aw3d30/data/index.htm
 [Digital Terrain Elevation Data (DTED)]: https://www.dlr.de/eoc/en/Portaldata/60/Resources/dokumente/7_sat_miss/SRTM-XSAR-DEM-DTED-1.1.pdf
@@ -184,4 +184,4 @@ You can also print the data matrix as tab separated values with
 [Bilinear interpolation]: https://en.wikipedia.org/wiki/Bilinear_interpolation
 [Inverse Distance Weighting (IDW) interpolation]: https://en.wikipedia.org/wiki/Inverse_distance_weighting
 [LNDI]: https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.LinearNDInterpolator.html
-[CKDT]: https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.html
+[cKDT]: https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.html

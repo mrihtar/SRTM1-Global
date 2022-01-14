@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-prog_ver = 'extpia v1.4 Copyright (c) 2019-2020 Matjaz Rihtar'
+prog_ver = 'extpia v1.5 Copyright (c) 2019-2022 Matjaz Rihtar'
 # py_ver = sys.version_info.major
 import sys, os, glob, re
 import ntpath, argparse
@@ -112,9 +112,10 @@ def procfile(fpath):
       sys.stderr.write('Nothing to be done for SRTM data\n')
       return rc
 
-    lat0 = int(fn[0][1:4])
+    # ALOS AW3D30 v3.1 file name format: ALPSMLC30_N046E015_DSM.tif
+    lat0 = int(fn[1][1:4])
     if fn[0][0].startswith('S'): lat0 = -lat0
-    lon0 = int(fn[0][5:8])
+    lon0 = int(fn[1][5:8])
     if fn[0][4].startswith('W'): lon0 = -lon0
 
     fns = []
@@ -126,23 +127,23 @@ def procfile(fpath):
       alat0 = abs(lat0)
       if lon0 < 0: # fn[0][4] == 'W'
         alon0 = abs(lon0)
-        fns[1]['name'] = '{}S{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, alat0, alon0-1)
-        fns[2]['name'] = '{}S{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, alat0-1, alon0)
-        fns[3]['name'] = '{}S{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, alat0-1, alon0-1)
+        fns[1]['name'] = '{}ALPSMLC30_S{:03d}W{:03d}_DSM.pickle'.format(fdir, alat0, alon0-1)
+        fns[2]['name'] = '{}ALPSMLC30_S{:03d}W{:03d}_DSM.pickle'.format(fdir, alat0-1, alon0)
+        fns[3]['name'] = '{}ALPSMLC30_S{:03d}W{:03d}_DSM.pickle'.format(fdir, alat0-1, alon0-1)
       else: # fn[0][4] == 'E'
-        fns[1]['name'] = '{}S{:03d}E{:03d}_AVE_DSM.pickle'.format(fdir, alat0, lon0+1)
-        fns[2]['name'] = '{}S{:03d}E{:03d}_AVE_DSM.pickle'.format(fdir, alat0-1, lon0)
-        fns[3]['name'] = '{}S{:03d}E{:03d}_AVE_DSM.pickle'.format(fdir, alat0-1, lon0+1)
+        fns[1]['name'] = '{}ALPSMLC30_S{:03d}E{:03d}_DSM.pickle'.format(fdir, alat0, lon0+1)
+        fns[2]['name'] = '{}ALPSMLC30_S{:03d}E{:03d}_DSM.pickle'.format(fdir, alat0-1, lon0)
+        fns[3]['name'] = '{}ALPSMLC30_S{:03d}E{:03d}_DSM.pickle'.format(fdir, alat0-1, lon0+1)
     else: # fn[0][0] == 'N'
       if lon0 < 0: # fn[0][4] == 'W'
         alon0 = abs(lon0)
-        fns[1]['name'] = '{}N{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, lat0, alon0-1)
-        fns[2]['name'] = '{}N{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, lat0+1, alon0)
-        fns[3]['name'] = '{}N{:03d}W{:03d}_AVE_DSM.pickle'.format(fdir, lat0+1, alon0-1)
+        fns[1]['name'] = '{}ALPSMLC30_N{:03d}W{:03d}_DSM.pickle'.format(fdir, lat0, alon0-1)
+        fns[2]['name'] = '{}ALPSMLC30_N{:03d}W{:03d}_DSM.pickle'.format(fdir, lat0+1, alon0)
+        fns[3]['name'] = '{}ALPSMLC30_N{:03d}W{:03d}_DSM.pickle'.format(fdir, lat0+1, alon0-1)
       else: # fn[0][4] == 'E'
-        fns[1]['name'] = '{}N{:03d}E{:03d}_AVE_DSM.pickle'.format(fdir, lat0, lon0+1)
-        fns[2]['name'] = '{}N{:03d}E{:03d}_AVE_DSM.pickle'.format(fdir, lat0+1, lon0)
-        fns[3]['name'] = '{}N{:03d}E{:03d}_AVE_DSM.pickle'.format(fdir, lat0+1, lon0+1)
+        fns[1]['name'] = '{}ALPSMLC30_N{:03d}E{:03d}_DSM.pickle'.format(fdir, lat0, lon0+1)
+        fns[2]['name'] = '{}ALPSMLC30_N{:03d}E{:03d}_DSM.pickle'.format(fdir, lat0+1, lon0)
+        fns[3]['name'] = '{}ALPSMLC30_N{:03d}E{:03d}_DSM.pickle'.format(fdir, lat0+1, lon0+1)
 
     for ii in range(4):
       fpath_ = fns[ii]['name']
